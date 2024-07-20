@@ -23,6 +23,7 @@ import (
 	"bytes"
 	"fmt"
 	"runtime"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -152,6 +153,7 @@ func (c *bboltClient) Txn(f func(*KvTxn) error, retry int) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			fe, ok := r.(error)
+			logger.Errorf("error: %s\n%s", r, debug.Stack())
 			if ok {
 				err = fe
 			} else {
