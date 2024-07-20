@@ -35,7 +35,7 @@ jobs:
         run: |
           echo "github.event_name is ${{github.event_name}}"
           if [[ "${{github.event_name}}" == "schedule" || "${{github.event_name}}" == "workflow_dispatch" ]]; then
-            echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "badger", "postgres", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
+            echo 'meta_matrix=["sqlite3", "redis", "mysql", "tikv", "badger","bbolt", "postgres", "mariadb", "fdb"]' >> $GITHUB_OUTPUT
           elif [[ "${{github.event_name}}" == "pull_request" || "${{github.event_name}}" == "push"  ]]; then
             echo 'meta_matrix=["redis"]' >> $GITHUB_OUTPUT
           else
@@ -106,7 +106,7 @@ jobs:
           pip3 install pytest
           pip3 install pyxattr
           stat /tmp/jfs/
-          if [[ "${{matrix.meta}}" == "tikv" || "${{matrix.meta}}" == "badger" ]]; then
+          if [[ "${{matrix.meta}}" == "tikv" || "${{matrix.meta}}" == "badger" || "${{matrix.meta}}" == "bbolt" ]]; then
             TEST_DIR=/tmp/jfs/ python3 -m pytest tests -k "not test_empty_value"
           else
             TEST_DIR=/tmp/jfs/ python3 -m pytest tests

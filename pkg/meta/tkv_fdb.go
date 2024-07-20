@@ -29,18 +29,18 @@ import (
 func init() {
 	Register("fdb", newKVMeta)
 	// drivers["fdb"] = newFdbClient
-	KvDriverRegister("fdb", newFdbClient)
+	RegisterKvDriver("fdb", newFdbClient)
 }
 
 type fdbTxn struct {
-	fdb.Transaction
+	ft fdb.Transaction
 }
 
 type fdbClient struct {
 	client fdb.Database
 }
 
-func newFdbClient(addr string) (tkvClient, error) {
+func newFdbClient(addr string) (TkvClient, error) {
 	err := fdb.APIVersion(630)
 	if err != nil {
 		return nil, fmt.Errorf("set API version: %s", err)
@@ -61,15 +61,15 @@ func (c *fdbClient) Name() string {
 	return "fdb"
 }
 
-func (c *fdbClient) txn(f func(*kvTxn) error, retry int) error {
+func (c *fdbClient) Txn(f func(*KvTxn) error, retry int) error {
 	_, err := c.client.Transact(func(t fdb.Transaction) (interface{}, error) {
-		e := f(&kvTxn{&fdbTxn{t}, retry})
+		e := f(&KvTxn{&fdbTxn{t}, retry})
 		return nil, e
 	})
 	return err
 }
 
-func (c *fdbClient) scan(prefix []byte, handler func(key, value []byte)) error {
+func (c *fdbClient) Scan(prefix []byte, handler func(key, value []byte)) error {
 	begin := fdb.Key(prefix)
 	end := fdb.Key(nextKey(prefix))
 	limit := 102400
@@ -115,7 +115,7 @@ func (c *fdbClient) Reset(prefix []byte) error {
 	return err
 }
 
-func (c *fdbClient) close() error {
+func (c *fdbClient) Close() error {
 	return nil
 }
 
@@ -125,14 +125,14 @@ func (c *fdbClient) ShouldRetry(err error) bool {
 
 func (c *fdbClient) Gc() {}
 
-func (tx *fdbTxn) get(key []byte) []byte {
-	return tx.Get(fdb.Key(key)).MustGet()
+func (tx *fdbTxn) Get(key []byte) []byte {
+	return tx.ft.Get(fdb.Key(key)).MustGet()
 }
 
 func (tx *fdbTxn) Gets(keys ...[]byte) [][]byte {
 	fut := make([]fdb.FutureByteSlice, len(keys))
 	for i, key := range keys {
-		fut[i] = tx.Get(fdb.Key(key))
+		fut[i] = tx.ft.Get(fdb.Key(key))
 	}
 	ret := make([][]byte, len(keys))
 	for i, f := range fut {
@@ -142,7 +142,7 @@ func (tx *fdbTxn) Gets(keys ...[]byte) [][]byte {
 }
 
 func (tx *fdbTxn) Scan(begin, end []byte, keysOnly bool, handler func(k, v []byte) bool) {
-	it := tx.GetRange(fdb.KeyRange{Begin: fdb.Key(begin), End: fdb.Key(end)},
+	it := tx.ft.GetRange(fdb.KeyRange{Begin: fdb.Key(begin), End: fdb.Key(end)},
 		fdb.RangeOptions{Mode: fdb.StreamingModeWantAll}).Iterator()
 	for it.Advance() {
 		kv := it.MustGet()
@@ -153,26 +153,26 @@ func (tx *fdbTxn) Scan(begin, end []byte, keysOnly bool, handler func(k, v []byt
 }
 
 func (tx *fdbTxn) Exist(prefix []byte) bool {
-	return tx.GetRange(
+	return tx.ft.GetRange(
 		fdb.KeyRange{Begin: fdb.Key(prefix), End: fdb.Key(nextKey(prefix))},
 		fdb.RangeOptions{Mode: fdb.StreamingModeWantAll},
 	).Iterator().Advance()
 }
 
 func (tx *fdbTxn) Set(key, value []byte) {
-	tx.Set(fdb.Key(key), value)
+	tx.ft.Set(fdb.Key(key), value)
 }
 
 func (tx *fdbTxn) Append(key []byte, value []byte) {
-	tx.AppendIfFits(fdb.Key(key), fdb.Key(value))
+	tx.ft.AppendIfFits(fdb.Key(key), fdb.Key(value))
 }
 
 func (tx *fdbTxn) IncrBy(key []byte, value int64) int64 {
-	tx.Add(fdb.Key(key), packCounter(value))
+	tx.ft.Add(fdb.Key(key), packCounter(value))
 	// TODO: don't return new value if not needed
-	return parseCounter(tx.Get(fdb.Key(key)).MustGet())
+	return parseCounter(tx.ft.Get(fdb.Key(key)).MustGet())
 }
 
 func (tx *fdbTxn) Delete(key []byte) {
-	tx.Clear(fdb.Key(key))
+	tx.ft.Clear(fdb.Key(key))
 }

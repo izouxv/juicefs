@@ -241,7 +241,7 @@ func daemonRun(c *cli.Context, addr string, vfsConf *vfs.Config) {
 }
 
 func expandPathForEmbedded(addr string) string {
-	embeddedSchemes := []string{"sqlite3://", "badger://"}
+	embeddedSchemes := []string{"sqlite3://", "badger://", "bbolt://"}
 	for _, es := range embeddedSchemes {
 		if strings.HasPrefix(addr, es) {
 			path := addr[len(es):]

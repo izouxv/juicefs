@@ -99,6 +99,8 @@ start_meta_engine(){
         retry install_tikv
     elif [ "$meta" == "badger" ]; then
         sudo go get github.com/dgraph-io/badger/v3
+    elif [ "$meta" == "bbolt" ]; then
+        sudo go get go.etcd.io/bbolt
     elif [ "$meta" == "mariadb" ]; then
         if lsof -i:3306; then
             echo "mariadb is already running"
@@ -190,6 +192,8 @@ get_meta_url(){
         meta_url="tikv://127.0.0.1:2379/test"
     elif [ "$meta" == "badger" ]; then
         meta_url="badger:///tmp/test"
+    elif [ "$meta" == "bbolt" ]; then
+        meta_url="bbolt:///tmp/test"
     elif [ "$meta" == "mariadb" ]; then
         meta_url="mysql://root:root@(127.0.0.1)/test"
     elif [ "$meta" == "tidb" ]; then

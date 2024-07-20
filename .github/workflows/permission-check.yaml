@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        meta: [ 'sqlite3', 'redis', 'badger' ]
+        meta: [ 'sqlite3', 'redis', 'badger', 'bbolt' ]
     
     runs-on: ubuntu-20.04
     steps:
