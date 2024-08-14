@@ -16,6 +16,10 @@
 
 package object
 
+import (
+	"github.com/juicedata/juicefs/pkg/meta"
+)
+
 const DefaultStorageClass = "STANDARD"
 
 type SupportStorageClass interface {
@@ -26,6 +30,7 @@ type SupportStorageClass interface {
 type ResponseAttrs struct {
 	storageClass *string
 	requestID    *string
+	ino          meta.Ino
 	// other interested attrs can be added here
 }
 
@@ -48,6 +53,12 @@ type AttrGetter func(attrs *ResponseAttrs)
 func WithRequestID(id *string) AttrGetter {
 	return func(attrs *ResponseAttrs) {
 		attrs.requestID = id
+	}
+}
+
+func WithIno(id meta.Ino) AttrGetter {
+	return func(attrs *ResponseAttrs) {
+		attrs.ino = id
 	}
 }
 

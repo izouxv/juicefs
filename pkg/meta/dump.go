@@ -73,6 +73,7 @@ type DumpedAttr struct {
 	Length    uint64 `json:"length"`
 	Rdev      uint32 `json:"rdev,omitempty"`
 	full      bool
+	Extra     []byte `json:"extra,omitempty"` //DirKey, FileIv string
 }
 
 type DumpedSlice struct {
@@ -388,6 +389,7 @@ func dumpAttr(a *Attr, d *DumpedAttr) {
 		d.Length = 0
 	}
 	d.full = a.Full
+	d.Extra = a.Extra
 }
 
 func loadAttr(d *DumpedAttr) *Attr {
@@ -406,6 +408,7 @@ func loadAttr(d *DumpedAttr) *Attr {
 		Nlink:     d.Nlink,
 		Rdev:      d.Rdev,
 		Full:      true,
+		Extra:     d.Extra,
 	} // Length and Parent not set
 }
 

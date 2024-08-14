@@ -16,18 +16,26 @@
 
 package chunk
 
-import "sync"
+import (
+	"sync"
 
+	"github.com/juicedata/juicefs/pkg/meta"
+)
+
+type keyIno struct {
+	Key string
+	ino meta.Ino
+}
 type prefetcher struct {
 	sync.Mutex
-	pending chan string
+	pending chan keyIno
 	busy    map[string]bool
-	op      func(key string)
+	op      func(key string, ino meta.Ino)
 }
 
-func newPrefetcher(parallel int, fetch func(string)) *prefetcher {
+func newPrefetcher(parallel int, fetch func(string, meta.Ino)) *prefetcher {
 	p := &prefetcher{
-		pending: make(chan string, 10),
+		pending: make(chan keyIno, 10),
 		busy:    make(map[string]bool),
 		op:      fetch,
 	}
@@ -40,22 +48,22 @@ func newPrefetcher(parallel int, fetch func(string)) *prefetcher {
 func (p *prefetcher) do() {
 	for key := range p.pending {
 		p.Lock()
-		if _, ok := p.busy[key]; !ok {
-			p.busy[key] = true
+		if _, ok := p.busy[key.Key]; !ok {
+			p.busy[key.Key] = true
 			p.Unlock()
 
-			p.op(key)
+			p.op(key.Key, key.ino)
 
 			p.Lock()
-			delete(p.busy, key)
+			delete(p.busy, key.Key)
 		}
 		p.Unlock()
 	}
 }
 
-func (p *prefetcher) fetch(key string) {
+func (p *prefetcher) fetch(key string, ino meta.Ino) {
 	select {
-	case p.pending <- key:
+	case p.pending <- keyIno{key, ino}:
 	default:
 	}
 }

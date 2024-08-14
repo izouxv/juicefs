@@ -82,7 +82,7 @@ func (v *VFS) cache(ctx meta.Context, action CacheAction, paths []string, concur
 				switch action {
 				case WarmupCache:
 					handler = func(s meta.Slice) error {
-						return v.Store.FillCache(s.Id, s.Size)
+						return v.Store.FillCache(s.Ino, s.Id, s.Size)
 					}
 
 					if v.Conf.Meta.OpenCache > 0 {

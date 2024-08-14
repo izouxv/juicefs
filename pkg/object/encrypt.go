@@ -230,6 +230,14 @@ func (e *encrypted) String() string {
 }
 
 func (e *encrypted) Get(key string, off, limit int64, getters ...AttrGetter) (io.ReadCloser, error) {
+
+	if true {
+		attrs := applyGetters(getters...)
+		if strings.HasPrefix(key, "chunks") && (attrs.ino == 0) {
+			fmt.Printf("key: %v", key)
+		}
+	}
+
 	r, err := e.ObjectStorage.Get(key, 0, -1, getters...)
 	if err != nil {
 		return nil, err
@@ -255,6 +263,14 @@ func (e *encrypted) Get(key string, off, limit int64, getters ...AttrGetter) (io
 }
 
 func (e *encrypted) Put(key string, in io.Reader, getters ...AttrGetter) error {
+
+	if true {
+		attrs := applyGetters(getters...)
+		if strings.HasPrefix(key, "chunks") && (attrs.ino == 0) {
+			fmt.Printf("key: %v", key)
+		}
+	}
+
 	plain, err := io.ReadAll(in)
 	if err != nil {
 		return err

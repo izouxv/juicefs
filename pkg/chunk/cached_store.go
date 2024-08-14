@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/juicedata/juicefs/pkg/compress"
+	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/juju/ratelimit"
@@ -53,13 +54,14 @@ type pendingItem struct {
 
 // slice for read and remove
 type rSlice struct {
+	ino    meta.Ino
 	id     uint64
 	length int
 	store  *cachedStore
 }
 
-func sliceForRead(id uint64, length int, store *cachedStore) *rSlice {
-	return &rSlice{id, length, store}
+func sliceForRead(ino meta.Ino, id uint64, length int, store *cachedStore) *rSlice {
+	return &rSlice{ino, id, length, store}
 }
 
 func (s *rSlice) blockSize(indx int) int {
@@ -70,7 +72,7 @@ func (s *rSlice) blockSize(indx int) int {
 	return bsize
 }
 
-func (s *rSlice) key(indx int) string {
+func (s *rSlice) key(indx int, ino meta.Ino) string {
 	if s.store.conf.HashPrefix {
 		return fmt.Sprintf("chunks/%02X/%v/%v_%v_%v", s.id%256, s.id/1000/1000, s.id, indx, s.blockSize(indx))
 	}
@@ -88,7 +90,7 @@ func (s *rSlice) keys() []string {
 	lastIndx := (s.length - 1) / s.store.conf.BlockSize
 	keys := make([]string, lastIndx+1)
 	for i := 0; i <= lastIndx; i++ {
-		keys[i] = s.key(i)
+		keys[i] = s.key(i, s.ino)
 	}
 	return keys
 }
@@ -126,7 +128,7 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		return got, nil
 	}
 
-	key := s.key(indx)
+	key := s.key(indx, s.ino)
 	if s.store.conf.CacheSize > 0 {
 		start := time.Now()
 		r, err := s.store.bcache.load(key)
@@ -165,7 +167,7 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		page.Acquire()
 		err := utils.WithTimeout(func() error {
 			defer page.Release()
-			in, err := s.store.storage.Get(key, int64(boff), int64(len(p)), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
+			in, err := s.store.storage.Get(key, int64(boff), int64(len(p)), object.WithRequestID(&reqID), object.WithStorageClass(&sc), object.WithIno(s.ino))
 			if err == nil {
 				n, err = io.ReadFull(in, p)
 				_ = in.Close()
@@ -177,7 +179,7 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		s.store.objectDataBytes.WithLabelValues("GET", sc).Add(float64(n))
 		s.store.objectReqsHistogram.WithLabelValues("GET", sc).Observe(used.Seconds())
 		if err == nil {
-			s.store.fetcher.fetch(key)
+			s.store.fetcher.fetch(key, s.ino)
 			return n, nil
 		} else {
 			s.store.objectReqErrors.Add(1)
@@ -192,7 +194,7 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 		} else {
 			tmp.Acquire()
 		}
-		err = s.store.load(key, tmp, s.store.shouldCache(blockSize), false)
+		err = s.store.load(key, tmp, s.store.shouldCache(blockSize), false, s.ino)
 		return tmp, err
 	})
 	defer block.Release()
@@ -206,7 +208,7 @@ func (s *rSlice) ReadAt(ctx context.Context, page *Page, off int) (n int, err er
 }
 
 func (s *rSlice) delete(indx int) error {
-	key := s.key(indx)
+	key := s.key(indx, s.ino)
 	return s.store.delete(key)
 }
 
@@ -220,7 +222,7 @@ func (s *rSlice) Remove() error {
 	for i := 0; i <= lastIndx; i++ {
 		// there could be multiple clients try to remove the same chunk in the same time,
 		// any of them should succeed if any blocks is removed
-		key := s.key(i)
+		key := s.key(i, s.ino)
 		s.store.removePending(key)
 		s.store.bcache.remove(key)
 	}
@@ -270,9 +272,9 @@ type wSlice struct {
 	pendings    int
 }
 
-func sliceForWrite(id uint64, store *cachedStore) *wSlice {
+func sliceForWrite(ino meta.Ino, id uint64, store *cachedStore) *wSlice {
 	return &wSlice{
-		rSlice: rSlice{id, 0, store},
+		rSlice: rSlice{ino, id, 0, store},
 		pages:  make([][]*Page, chunkSize/store.conf.BlockSize),
 		errors: make(chan error, chunkSize/store.conf.BlockSize),
 	}
@@ -327,7 +329,8 @@ func (s *wSlice) WriteAt(p []byte, off int64) (n int, err error) {
 	return n, nil
 }
 
-func (store *cachedStore) put(key string, p *Page) error {
+func (store *cachedStore) put(key string, p *Page, ino meta.Ino) error {
+
 	if store.upLimit != nil {
 		store.upLimit.Wait(int64(len(p.Data)))
 	}
@@ -339,7 +342,7 @@ func (store *cachedStore) put(key string, p *Page) error {
 	return utils.WithTimeout(func() error {
 		defer p.Release()
 		st := time.Now()
-		err := store.storage.Put(key, bytes.NewReader(p.Data), object.WithRequestID(&reqID), object.WithStorageClass(&sc))
+		err := store.storage.Put(key, bytes.NewReader(p.Data), object.WithRequestID(&reqID), object.WithStorageClass(&sc), object.WithIno(ino))
 		used := time.Since(st)
 		logRequest("PUT", key, "", reqID, err, used)
 		store.objectDataBytes.WithLabelValues("PUT", sc).Add(float64(len(p.Data)))
@@ -404,7 +407,7 @@ func (store *cachedStore) upload(key string, block *Page, s *wSlice) error {
 			err = fmt.Errorf("(cancelled) upload block %s: %s (after %d tries)", key, err, try)
 			break
 		}
-		if err = store.put(key, buf); err == nil {
+		if err = store.put(key, buf, s.ino); err == nil {
 			break
 		}
 		logger.Warnf("Upload %s: %s (try %d)", key, err, try+1)
@@ -417,7 +420,7 @@ func (store *cachedStore) upload(key string, block *Page, s *wSlice) error {
 
 func (s *wSlice) upload(indx int) {
 	blen := s.blockSize(indx)
-	key := s.key(indx)
+	key := s.key(indx, s.ino)
 	pages := s.pages[indx]
 	s.pages[indx] = nil
 	s.pendings++
@@ -674,7 +677,7 @@ func logRequest(typeStr, key, param, reqID string, err error, used time.Duration
 	}
 }
 
-func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bool) (err error) {
+func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bool, ino meta.Ino) (err error) {
 	defer func() {
 		e := recover()
 		if e != nil {
@@ -715,7 +718,7 @@ func (store *cachedStore) load(key string, page *Page, cache bool, forceCache bo
 				store.objectReqErrors.Add(1)
 				start = time.Now()
 			}
-			in, err = store.storage.Get(key, 0, -1, object.WithRequestID(&reqID), object.WithStorageClass(&sc))
+			in, err = store.storage.Get(key, 0, -1, object.WithRequestID(&reqID), object.WithStorageClass(&sc), object.WithIno(ino))
 			tried++
 		}
 		if err == nil {
@@ -814,14 +817,14 @@ func NewCachedStore(storage object.ObjectStorage, config Config, reg prometheus.
 	if config.CacheSize == 0 {
 		config.Prefetch = 0 // disable prefetch if cache is disabled
 	}
-	store.fetcher = newPrefetcher(config.Prefetch, func(key string) {
+	store.fetcher = newPrefetcher(config.Prefetch, func(key string, ino meta.Ino) {
 		size := parseObjOrigSize(key)
 		if size == 0 || size > store.conf.BlockSize {
 			return
 		}
 		p := NewOffPage(size)
 		defer p.Release()
-		_ = store.load(key, p, true, true)
+		_ = store.load(key, p, true, true, ino)
 	})
 
 	if store.conf.CacheDir != "memory" && store.conf.Writeback {
@@ -1073,21 +1076,21 @@ func (store *cachedStore) canUpload() bool {
 		store.startHour > store.endHour && (h >= store.startHour || h < store.endHour)
 }
 
-func (store *cachedStore) NewReader(id uint64, length int) Reader {
-	return sliceForRead(id, length, store)
+func (store *cachedStore) NewReader(ino meta.Ino, id uint64, length int) Reader {
+	return sliceForRead(ino, id, length, store)
 }
 
-func (store *cachedStore) NewWriter(id uint64) Writer {
-	return sliceForWrite(id, store)
+func (store *cachedStore) NewWriter(ino meta.Ino, id uint64) Writer {
+	return sliceForWrite(ino, id, store)
 }
 
 func (store *cachedStore) Remove(id uint64, length int) error {
-	r := sliceForRead(id, length, store)
+	r := sliceForRead(0, id, length, store)
 	return r.Remove()
 }
 
-func (store *cachedStore) FillCache(id uint64, length uint32) error {
-	r := sliceForRead(id, int(length), store)
+func (store *cachedStore) FillCache(ino meta.Ino, id uint64, length uint32) error {
+	r := sliceForRead(ino, id, int(length), store)
 	keys := r.keys()
 	var err error
 	for _, k := range keys {
@@ -1103,7 +1106,7 @@ func (store *cachedStore) FillCache(id uint64, length uint32) error {
 		}
 		p := NewOffPage(size)
 		defer p.Release()
-		if e := store.load(k, p, true, true); e != nil {
+		if e := store.load(k, p, true, true, ino); e != nil {
 			logger.Warnf("Failed to load key: %s %s", k, e)
 			err = e
 		}
@@ -1112,7 +1115,7 @@ func (store *cachedStore) FillCache(id uint64, length uint32) error {
 }
 
 func (store *cachedStore) EvictCache(id uint64, length uint32) error {
-	r := sliceForRead(id, int(length), store)
+	r := sliceForRead(0, id, int(length), store)
 	keys := r.keys()
 	for _, k := range keys {
 		store.bcache.remove(k)
@@ -1121,7 +1124,7 @@ func (store *cachedStore) EvictCache(id uint64, length uint32) error {
 }
 
 func (store *cachedStore) CheckCache(id uint64, length uint32) (uint64, error) {
-	r := sliceForRead(id, int(length), store)
+	r := sliceForRead(0, id, int(length), store)
 	keys := r.keys()
 	missBytes := uint64(0)
 	for i, k := range keys {

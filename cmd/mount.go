@@ -404,7 +404,7 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 	if patch != nil {
 		patch(format)
 	}
-	blob, err := createStorage(*format)
+	blob, err := createStorage(*format, cli)
 	if err != nil {
 		return nil, err
 	}
@@ -420,7 +420,7 @@ func NewReloadableStorage(format *meta.Format, cli meta.Meta, patch func(*meta.F
 		if new.Storage != old.Storage || new.Bucket != old.Bucket || new.AccessKey != old.AccessKey || new.SecretKey != old.SecretKey || new.SessionToken != old.SessionToken || new.StorageClass != old.StorageClass {
 			logger.Infof("found new configuration: storage=%s bucket=%s ak=%s storageClass=%s", new.Storage, new.Bucket, new.AccessKey, new.StorageClass)
 
-			newBlob, err := createStorage(*new)
+			newBlob, err := createStorage(*new, cli)
 			if err != nil {
 				logger.Warnf("object storage: %s", err)
 				return

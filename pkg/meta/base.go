@@ -765,10 +765,15 @@ func (m *baseMeta) parseAttr(buf []byte, attr *Attr) {
 	attr.Nlink = rb.Get32()
 	attr.Length = rb.Get64()
 	attr.Rdev = rb.Get32()
+
+	extraLen := int(rb.Get32())
+	attr.Extra = rb.Get(extraLen)
+
 	if rb.Left() >= 8 {
 		attr.Parent = Ino(rb.Get64())
 	}
 	attr.Full = true
+
 	if rb.Left() >= 8 {
 		attr.AccessACL = rb.Get32()
 		attr.DefaultACL = rb.Get32()
@@ -778,6 +783,7 @@ func (m *baseMeta) parseAttr(buf []byte, attr *Attr) {
 
 func (m *baseMeta) marshal(attr *Attr) []byte {
 	size := uint32(36 + 24 + 4 + 8)
+	size += uint32(4 + len(attr.Extra)) //extra size
 	if attr.AccessACL|attr.DefaultACL != aclAPI.None {
 		size += 8
 	}
@@ -795,6 +801,10 @@ func (m *baseMeta) marshal(attr *Attr) []byte {
 	w.Put32(attr.Nlink)
 	w.Put64(attr.Length)
 	w.Put32(attr.Rdev)
+
+	w.Put32(uint32(len(attr.Extra)))
+	w.Put([]byte(attr.Extra))
+
 	w.Put64(uint64(attr.Parent))
 	if attr.AccessACL+attr.DefaultACL > 0 {
 		w.Put32(attr.AccessACL)

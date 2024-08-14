@@ -19,6 +19,8 @@ package chunk
 import (
 	"context"
 	"io"
+
+	"github.com/juicedata/juicefs/pkg/meta"
 )
 
 type Reader interface {
@@ -35,10 +37,10 @@ type Writer interface {
 }
 
 type ChunkStore interface {
-	NewReader(id uint64, length int) Reader
-	NewWriter(id uint64) Writer
+	NewReader(ino meta.Ino, id uint64, length int) Reader
+	NewWriter(ino meta.Ino, id uint64) Writer
 	Remove(id uint64, length int) error
-	FillCache(id uint64, length uint32) error
+	FillCache(ino meta.Ino, id uint64, length uint32) error
 	EvictCache(id uint64, length uint32) error
 	CheckCache(id uint64, length uint32) (uint64, error)
 	UsedMemory() int64

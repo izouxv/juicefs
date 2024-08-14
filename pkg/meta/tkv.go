@@ -1097,7 +1097,7 @@ func (m *kvMeta) doReadlink(ctx Context, inode Ino, noatime bool) (atime int64, 
 func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode, cumask uint16, path string, inode *Ino, attr *Attr) syscall.Errno {
 	return errno(m.txn(func(tx *KvTxn) error {
 		var pattr Attr
-		rs := tx.gets(m.inodeKey(parent), m.entryKey(parent, name))
+		rs := tx.Gets(m.inodeKey(parent), m.entryKey(parent, name))
 		if rs[0] == nil {
 			return syscall.ENOENT
 		}
@@ -1127,7 +1127,7 @@ func (m *kvMeta) doMknod(ctx Context, parent Ino, name string, _type uint8, mode
 		}
 		if foundIno != 0 {
 			if _type == TypeFile || _type == TypeDirectory {
-				a = tx.Get(m.inodeKey(foundIno))
+				a := tx.Get(m.inodeKey(foundIno))
 				if a != nil {
 					m.parseAttr(a, attr)
 				} else {

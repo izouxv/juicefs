@@ -168,6 +168,8 @@ type Attr struct {
 
 	AccessACL  uint32 // access ACL id (identical ACL rules share the same access ACL ID.)
 	DefaultACL uint32 // default ACL id (default ACL and the access ACL share the same cache and store)
+
+	Extra []byte
 }
 
 func typeToStatType(_type uint8) uint32 {
@@ -248,6 +250,7 @@ type Entry struct {
 // Slice is a slice of a chunk.
 // Multiple slices could be combined together as a chunk.
 type Slice struct {
+	Ino  Ino
 	Id   uint64
 	Size uint32
 	Off  uint32

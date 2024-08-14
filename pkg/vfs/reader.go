@@ -812,7 +812,7 @@ func (r *dataReader) readSlice(ctx context.Context, s *meta.Slice, page *chunk.P
 		return nil
 	}
 
-	reader := r.store.NewReader(s.Id, int(s.Size))
+	reader := r.store.NewReader(s.Ino, s.Id, int(s.Size))
 	for read < len(buf) {
 		p := page.Slice(read, len(buf)-read)
 		n, err := reader.ReadAt(ctx, p, off+int(s.Off))

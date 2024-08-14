@@ -19,6 +19,7 @@ package meta
 import "github.com/juicedata/juicefs/pkg/utils"
 
 type slice struct {
+	ino   Ino //engin doRead assign
 	id    uint64
 	size  uint32
 	off   uint32
@@ -145,10 +146,10 @@ func buildSlice(ss []*slice) []Slice {
 	var chunk []Slice
 	root.visit(func(s *slice) {
 		if s.pos > pos {
-			chunk = append(chunk, Slice{Size: s.pos - pos, Len: s.pos - pos})
+			chunk = append(chunk, Slice{Ino: s.ino, Size: s.pos - pos, Len: s.pos - pos})
 			pos = s.pos
 		}
-		chunk = append(chunk, Slice{Id: s.id, Size: s.size, Off: s.off, Len: s.len})
+		chunk = append(chunk, Slice{Ino: s.ino, Id: s.id, Size: s.size, Off: s.off, Len: s.len})
 		pos += s.len
 	})
 	return chunk

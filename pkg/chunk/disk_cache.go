@@ -39,6 +39,7 @@ import (
 	"github.com/davies/groupcache/consistenthash"
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
+	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/utils"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/twmb/murmur3"
@@ -352,7 +353,7 @@ func (cache *cacheStore) cleanupExpire() {
 			if !cache.available() {
 				break
 			}
-			_ = cache.removeFile(cache.cachePath(cache.getPathFromKey(k)))
+			_ = cache.removeFile(cache.cachePath(cache.getPathFromKey(k, 0)))
 		}
 		todel = todel[:0]
 		time.Sleep(interval * time.Duration((cnt+1-deleted)/(cnt+1)))
@@ -546,7 +547,7 @@ func (cache *cacheStore) getCacheKey(key string) cacheKey {
 	return k
 }
 
-func (cache *cacheStore) getPathFromKey(k cacheKey) string {
+func (cache *cacheStore) getPathFromKey(k cacheKey, ino meta.Ino) string {
 	if cache.hashPrefix {
 		return fmt.Sprintf("chunks/%02X/%v/%v_%v_%v", k.id%256, k.id/1000/1000, k.id, k.indx, k.size)
 	} else {
@@ -785,7 +786,7 @@ func (cache *cacheStore) cleanupFull() {
 		if !cache.available() {
 			break
 		}
-		_ = cache.removeFile(cache.cachePath(cache.getPathFromKey(k)))
+		_ = cache.removeFile(cache.cachePath(cache.getPathFromKey(k, 0)))
 	}
 	cache.Lock()
 }
@@ -821,7 +822,7 @@ func (cache *cacheStore) uploadStaging() {
 		cnt++
 		if cnt > 1 {
 			cache.Unlock()
-			key := cache.getPathFromKey(lastK)
+			key := cache.getPathFromKey(lastK, 0)
 			if !cache.uploader(key, cache.stagePath(key), true) {
 				logger.Warnf("Upload list is too full")
 				cache.Lock()
@@ -840,7 +841,7 @@ func (cache *cacheStore) uploadStaging() {
 	}
 	if cnt > 0 {
 		cache.Unlock()
-		key := cache.getPathFromKey(lastK)
+		key := cache.getPathFromKey(lastK, 0)
 		if cache.uploader(key, cache.stagePath(key), true) {
 			logger.Debugf("upload %s, age: %d", key, uint32(time.Now().Unix())-lastValue.atime)
 		}

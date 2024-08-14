@@ -85,6 +85,7 @@ type node struct {
 	Parent       Ino
 	AccessACLId  uint32 `xorm:"'access_acl_id'"`
 	DefaultACLId uint32 `xorm:"'default_acl_id'"`
+	Extra        []byte //`xorm:"notnull"`
 }
 
 func getACLIdColName(aclType uint8) string {
@@ -887,6 +888,7 @@ func (m *dbMeta) parseAttr(n *node, attr *Attr) {
 	attr.Nlink = n.Nlink
 	attr.Length = n.Length
 	attr.Rdev = n.Rdev
+	attr.Extra = n.Extra
 	attr.Parent = n.Parent
 	attr.Full = true
 	attr.AccessACL = n.AccessACLId
@@ -911,6 +913,7 @@ func (m *dbMeta) parseNode(attr *Attr, n *node) {
 	n.Nlink = attr.Nlink
 	n.Length = attr.Length
 	n.Rdev = attr.Rdev
+	n.Extra = attr.Extra
 	n.Parent = attr.Parent
 	n.AccessACLId = attr.AccessACL
 	n.DefaultACLId = attr.DefaultACL
@@ -1027,7 +1030,7 @@ func (m *dbMeta) doSetAttr(ctx Context, inode Ino, set uint16, sugidclearmode ui
 		dirtyNode.Ctime = now.UnixNano() / 1e3
 		dirtyNode.Ctimensec = int16(now.Nanosecond() % 1000)
 		_, err = s.Cols("flags", "mode", "uid", "gid", "atime", "mtime", "ctime",
-			"atimensec", "mtimensec", "ctimensec", "access_acl_id", "default_acl_id").
+			"atimensec", "mtimensec", "ctimensec", "access_acl_id", "default_acl_id", "extra").
 			Update(&dirtyNode, &node{Inode: inode})
 		if err == nil {
 			m.parseAttr(&dirtyNode, attr)

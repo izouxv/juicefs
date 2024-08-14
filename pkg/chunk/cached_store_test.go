@@ -31,7 +31,7 @@ import (
 )
 
 func forgetSlice(store ChunkStore, sliceId uint64, size int) error {
-	w := store.NewWriter(sliceId)
+	w := store.NewWriter(0, sliceId)
 	buf := bytes.Repeat([]byte{0x41}, size)
 	if _, err := w.WriteAt(buf, 0); err != nil {
 		return err
@@ -40,7 +40,7 @@ func forgetSlice(store ChunkStore, sliceId uint64, size int) error {
 }
 
 func testStore(t *testing.T, store ChunkStore) {
-	writer := store.NewWriter(1)
+	writer := store.NewWriter(0, 1)
 	data := []byte("hello world")
 	if n, err := writer.WriteAt(data, 0); n != 11 || err != nil {
 		t.Fatalf("write fail: %d %s", n, err)
@@ -58,7 +58,7 @@ func testStore(t *testing.T, store ChunkStore) {
 	}
 	defer store.Remove(1, size)
 
-	reader := store.NewReader(1, size)
+	reader := store.NewReader(0, 1, size)
 	p := NewPage(make([]byte, 5))
 	if n, err := reader.ReadAt(context.Background(), p, 6); n != 5 || err != nil {
 		t.Fatalf("read failed: %d %s", n, err)
@@ -236,10 +236,10 @@ func TestFillCache(t *testing.T) {
 	if cnt, used := bcache.stats(); cnt != 1 || used != 1024+4096 { // only chunk 10 cached
 		t.Fatalf("cache cnt %d used %d, expect cnt 1 used 5120", cnt, used)
 	}
-	if err := store.FillCache(10, 1024); err != nil {
+	if err := store.FillCache(0, 10, 1024); err != nil {
 		t.Fatalf("fill cache 10 1024: %s", err)
 	}
-	if err := store.FillCache(11, uint32(bsize)); err != nil {
+	if err := store.FillCache(0, 11, uint32(bsize)); err != nil {
 		t.Fatalf("fill cache 11 %d: %s", bsize, err)
 	}
 	time.Sleep(time.Second)
@@ -277,7 +277,7 @@ func BenchmarkCachedRead(b *testing.B) {
 	config := defaultConf
 	config.BlockSize = 4 << 20
 	store := NewCachedStore(blob, config, nil)
-	w := store.NewWriter(1)
+	w := store.NewWriter(0, 1)
 	if _, err := w.WriteAt(make([]byte, 1024), 0); err != nil {
 		b.Fatalf("write fail: %s", err)
 	}
@@ -288,7 +288,7 @@ func BenchmarkCachedRead(b *testing.B) {
 	p := NewPage(make([]byte, 1024))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		r := store.NewReader(1, 1024)
+		r := store.NewReader(0, 1, 1024)
 		if n, err := r.ReadAt(context.Background(), p, 0); err != nil || n != 1024 {
 			b.FailNow()
 		}
@@ -301,7 +301,7 @@ func BenchmarkUncachedRead(b *testing.B) {
 	config.BlockSize = 4 << 20
 	config.CacheSize = 0
 	store := NewCachedStore(blob, config, nil)
-	w := store.NewWriter(2)
+	w := store.NewWriter(0, 2)
 	if _, err := w.WriteAt(make([]byte, 1024), 0); err != nil {
 		b.Fatalf("write fail: %s", err)
 	}
@@ -311,7 +311,7 @@ func BenchmarkUncachedRead(b *testing.B) {
 	p := NewPage(make([]byte, 1024))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		r := store.NewReader(2, 1024)
+		r := store.NewReader(0, 2, 1024)
 		if n, err := r.ReadAt(context.Background(), p, 0); err != nil || n != 1024 {
 			b.FailNow()
 		}

@@ -215,7 +215,7 @@ func fixObjectSize(s uint64) uint64 {
 	return s
 }
 
-func createStorage(format meta.Format) (object.ObjectStorage, error) {
+func createStorage(format meta.Format, m meta.Meta) (object.ObjectStorage, error) {
 	if err := format.Decrypt(); err != nil {
 		return nil, fmt.Errorf("format decrypt: %s", err)
 	}
@@ -476,8 +476,9 @@ func format(c *cli.Context) error {
 			format.Bucket += "/"
 		}
 	}
+	defer m.Shutdown()
 
-	blob, err := createStorage(*format)
+	blob, err := createStorage(*format, m)
 	if err != nil {
 		logger.Fatalf("object storage: %s", err)
 	}

@@ -70,6 +70,9 @@ func load(ctx *cli.Context) error {
 	src := ctx.Args().Get(1)
 	removePassword(metaUri)
 	var r io.ReadCloser
+
+	m := meta.NewClient(metaUri, nil)
+
 	if ctx.Args().Len() == 1 {
 		r = os.Stdin
 		src = "STDIN"
@@ -126,7 +129,6 @@ func load(ctx *cli.Context) error {
 			r = fp
 		}
 	}
-	m := meta.NewClient(metaUri, nil)
 	if format, err := m.Load(false); err == nil {
 		return fmt.Errorf("Database %s is used by volume %s", utils.RemovePassword(metaUri), format.Name)
 	}

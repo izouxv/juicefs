@@ -46,7 +46,7 @@ func TestCompact(t *testing.T) {
 			buf[j] = byte(i)
 		}
 		cid := uint64(i)
-		w := store.NewWriter(cid)
+		w := store.NewWriter(0, cid)
 		if n, e := w.WriteAt(buf, 0); e != nil {
 			t.Fatalf("write chunk %d: %s", cid, e)
 		} else {
@@ -66,7 +66,7 @@ func TestCompact(t *testing.T) {
 	}
 
 	// verify result
-	r := store.NewReader(cid, total)
+	r := store.NewReader(0, cid, total)
 	var off int
 	for i := 0; i < 100; i++ {
 		buf := make([]byte, 100+i*100)

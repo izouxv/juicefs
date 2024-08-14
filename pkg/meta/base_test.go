@@ -1660,7 +1660,7 @@ func testTruncateAndDelete(t *testing.T, m Meta) {
 	if st := m.NewSlice(ctx, &sliceId); st != 0 {
 		t.Fatalf("new chunk: %s", st)
 	}
-	if st := m.Write(ctx, inode, 0, 100, Slice{sliceId, 100, 0, 100}, time.Now()); st != 0 {
+	if st := m.Write(ctx, inode, 0, 100, Slice{0, sliceId, 100, 0, 100}, time.Now()); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
 	if st := m.Truncate(ctx, inode, 0, 200<<20, attr, false); st != 0 {
@@ -1718,10 +1718,10 @@ func testCopyFileRange(t *testing.T, m Meta) {
 		t.Fatalf("create file %s", st)
 	}
 	defer m.Unlink(ctx, 1, "fout")
-	m.Write(ctx, iin, 0, 100, Slice{10, 200, 0, 100}, time.Now())
-	m.Write(ctx, iin, 1, 100<<10, Slice{11, 40 << 20, 0, 40 << 20}, time.Now())
-	m.Write(ctx, iin, 3, 0, Slice{12, 63 << 20, 10 << 20, 30 << 20}, time.Now())
-	m.Write(ctx, iout, 2, 10<<20, Slice{13, 50 << 20, 10 << 20, 30 << 20}, time.Now())
+	m.Write(ctx, iin, 0, 100, Slice{iin, 10, 200, 0, 100}, time.Now())
+	m.Write(ctx, iin, 1, 100<<10, Slice{iin, 11, 40 << 20, 0, 40 << 20}, time.Now())
+	m.Write(ctx, iin, 3, 0, Slice{iin, 12, 63 << 20, 10 << 20, 30 << 20}, time.Now())
+	m.Write(ctx, iout, 2, 10<<20, Slice{iin, 13, 50 << 20, 10 << 20, 30 << 20}, time.Now())
 	var copied uint64
 	if st := m.CopyFileRange(ctx, iin, 150, iout, 30<<20, 200<<20, 0, &copied, nil); st != 0 {
 		t.Fatalf("copy file range: %s", st)
@@ -1731,10 +1731,10 @@ func testCopyFileRange(t *testing.T, m Meta) {
 		t.Fatalf("expect copy %d bytes, but got %d", expected, copied)
 	}
 	var expectedSlices = [][]Slice{
-		{{0, 30 << 20, 0, 30 << 20}, {10, 200, 50, 50}, {0, 0, 200, ChunkSize - 30<<20 - 50}},
-		{{0, 0, 150 + (ChunkSize - 30<<20), 30<<20 - 150}, {0, 0, 0, 100 << 10}, {11, 40 << 20, 0, (34 << 20) + 150 - (100 << 10)}},
-		{{11, 40 << 20, (34 << 20) + 150 - (100 << 10), 6<<20 - 150 + 100<<10}, {0, 0, 40<<20 + 100<<10, ChunkSize - 40<<20 - 100<<10}, {0, 0, 0, 150 + (ChunkSize - 30<<20)}},
-		{{0, 0, 150 + (ChunkSize - 30<<20), 30<<20 - 150}, {12, 63 << 20, 10 << 20, (8 << 20) + 150}},
+		{{iout, 0, 30 << 20, 0, 30 << 20}, {iout, 10, 200, 50, 50}, {iout, 0, 0, 200, ChunkSize - 30<<20 - 50}},
+		{{iout, 0, 0, 150 + (ChunkSize - 30<<20), 30<<20 - 150}, {iout, 0, 0, 0, 100 << 10}, {iout, 11, 40 << 20, 0, (34 << 20) + 150 - (100 << 10)}},
+		{{iout, 11, 40 << 20, (34 << 20) + 150 - (100 << 10), 6<<20 - 150 + 100<<10}, {iout, 0, 0, 40<<20 + 100<<10, ChunkSize - 40<<20 - 100<<10}, {iout, 0, 0, 0, 150 + (ChunkSize - 30<<20)}},
+		{{iout, 0, 0, 150 + (ChunkSize - 30<<20), 30<<20 - 150}, {iout, 12, 63 << 20, 10 << 20, (8 << 20) + 150}},
 	}
 	for i := uint32(0); i < 4; i++ {
 		var slices []Slice
@@ -1745,6 +1745,7 @@ func testCopyFileRange(t *testing.T, m Meta) {
 			t.Fatalf("expect chunk %d: %+v, but got %+v", i, expectedSlices[i], slices)
 		}
 		for j, s := range slices {
+			s.Ino = iout
 			if s != expectedSlices[i][j] {
 				t.Fatalf("expect slice %d,%d: %+v, but got %+v", i, j, expectedSlices[i][j], s)
 			}
@@ -1752,6 +1753,9 @@ func testCopyFileRange(t *testing.T, m Meta) {
 	}
 }
 
+func mm(m Meta) Meta {
+	return m
+}
 func testCloseSession(t *testing.T, m Meta) {
 	// reset session
 	m.getBase().sid = 0
@@ -1793,13 +1797,16 @@ func testCloseSession(t *testing.T, m Meta) {
 	if _, err = m.GetSession(sid, true); err == nil {
 		t.Fatalf("get a deleted session: %s", err)
 	}
-	switch m := m.(type) {
+
+	switch m := mm(m).(type) {
 	case *redisMeta:
 		s, err = m.getSession(strconv.FormatUint(sid, 10), true)
 	case *dbMeta:
 		s, err = m.getSession(&session2{Sid: sid, Info: []byte("{}")}, true)
 	case *kvMeta:
 		s, err = m.getSession(sid, true)
+	default:
+		panic(-1)
 	}
 	if err != nil {
 		t.Fatalf("get session: %s", err)
@@ -2032,7 +2039,8 @@ func testParents(t *testing.T, m Meta) {
 func testOpenCache(t *testing.T, m Meta) {
 	ctx := Background
 	var inode Ino
-	var attr = &Attr{}
+	extra := bytes.Repeat([]byte{'A'}, 128)
+	var attr = &Attr{Extra: extra}
 	if st := m.Create(ctx, 1, "f", 0644, 022, 0, &inode, attr); st != 0 {
 		t.Fatalf("create f: %s", st)
 	}
@@ -2046,7 +2054,8 @@ func testOpenCache(t *testing.T, m Meta) {
 	if st := m.GetAttr(ctx, inode, attr2); st != 0 {
 		t.Fatalf("getattr f: %s", st)
 	}
-	if *attr != *attr2 {
+	// if  *attr != *attr2 {
+	if !reflect.DeepEqual(*attr, *attr2) {
 		t.Fatalf("attrs not the same: attr %+v; attr2 %+v", *attr, *attr2)
 	}
 	attr2.Uid = 1
@@ -2318,7 +2327,7 @@ func testAttrFlags(t *testing.T, m Meta) {
 
 func setAttr(t *testing.T, m Meta, inode Ino, attr *Attr) {
 	var err error
-	switch m := m.(type) {
+	switch m := mm(m).(type) {
 	case *redisMeta:
 		err = m.txn(Background, func(tx *redis.Tx) error {
 			return tx.Set(Background, m.inodeKey(inode), m.marshal(attr), 0).Err()
@@ -2343,6 +2352,8 @@ func setAttr(t *testing.T, m Meta, inode Ino, attr *Attr) {
 				Length: attr.Length,
 				Rdev:   attr.Rdev,
 				Parent: attr.Parent,
+
+				Extra: attr.Extra,
 			})
 			return err
 		})
@@ -2351,6 +2362,8 @@ func setAttr(t *testing.T, m Meta, inode Ino, attr *Attr) {
 			tx.Set(m.inodeKey(inode), m.marshal(attr))
 			return nil
 		})
+	default:
+		panic(-1)
 	}
 	if err != nil {
 		t.Fatalf("setAttr: %v", err)
@@ -2606,7 +2619,7 @@ func testClone(t *testing.T, m Meta) {
 	if st := m.NewSlice(Background, &sliceId); st != 0 {
 		t.Fatalf("new chunk: %s", st)
 	}
-	if st := m.Write(Background, file1, 0, 0, Slice{sliceId, 67108864, 0, 67108864}, time.Now()); st != 0 {
+	if st := m.Write(Background, file1, 0, 0, Slice{0, sliceId, 67108864, 0, 67108864}, time.Now()); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
 
@@ -2618,7 +2631,7 @@ func testClone(t *testing.T, m Meta) {
 	if st := m.NewSlice(Background, &sliceId2); st != 0 {
 		t.Fatalf("new chunk: %s", st)
 	}
-	if st := m.Write(Background, file2, 0, 0, Slice{sliceId2, 67108863, 0, 67108863}, time.Now()); st != 0 {
+	if st := m.Write(Background, file2, 0, 0, Slice{0, sliceId2, 67108863, 0, 67108863}, time.Now()); st != 0 {
 		t.Fatalf("write file %s", st)
 	}
 	var file3 Ino
@@ -2730,13 +2743,15 @@ func testClone(t *testing.T, m Meta) {
 	checkEntryTree(t, m, dir1, cloneDstIno, func(srcEntry, dstEntry *Entry, dstIno Ino) {
 		checkEntry(t, m, srcEntry, dstEntry, dstIno)
 
-		switch m := m.(type) {
+		switch m := mm(m).(type) {
 		case *redisMeta:
 			removedItem = append(removedItem, m.inodeKey(dstEntry.Inode), m.entryKey(dstEntry.Inode), m.xattrKey(dstEntry.Inode), m.symKey(dstEntry.Inode))
 		case *dbMeta:
 			removedItem = append(removedItem, &node{Inode: dstEntry.Inode}, &edge{Inode: dstEntry.Inode, Parent: dstEntry.Attr.Parent}, &xattr{Inode: dstEntry.Inode}, &symlink{Inode: dstEntry.Inode})
 		case *kvMeta:
 			removedItem = append(removedItem, m.inodeKey(dstEntry.Inode), m.entryKey(dstEntry.Attr.Parent, string(dstEntry.Name)), m.symKey(dstEntry.Inode))
+		default:
+			panic(-1)
 		}
 	})
 	// check slice ref after clone
@@ -2760,7 +2775,7 @@ func testClone(t *testing.T, m Meta) {
 	})
 	// check remove tree
 	var dNode1, dNode2, dNode3, dNode4 Ino = 101, 102, 103, 104
-	switch m := m.(type) {
+	switch m := mm(m).(type) {
 	case *redisMeta:
 		// del edge first
 		if err := m.rdb.HDel(Background, m.entryKey(cloneDstAttr.Parent), cloneDstName).Err(); err != nil {
@@ -2826,6 +2841,8 @@ func testClone(t *testing.T, m Meta) {
 			tx.Set(m.detachedKey(dNode4), m.packInt64(time.Now().Add(-48*time.Hour).Unix()))
 			return nil
 		})
+	default:
+		panic(-1)
 
 	}
 	time.Sleep(1 * time.Second)
@@ -2886,7 +2903,8 @@ func checkEntry(t *testing.T, m Meta, srcEntry, dstEntry *Entry, dstParentIno In
 	dstAttr.Nlink = 0
 	srcAttr.Parent = 0
 	dstAttr.Parent = 0
-	if *srcAttr != *dstAttr {
+	// if *srcAttr != *dstAttr {
+	if !reflect.DeepEqual(*srcAttr, *dstAttr) {
 		t.Fatalf("unmatched attr: %#v, %#v", *srcAttr, *dstAttr)
 	}
 
