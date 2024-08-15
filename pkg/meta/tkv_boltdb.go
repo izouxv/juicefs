@@ -142,7 +142,7 @@ func isNested() bool {
 	fs := getCallerFrame(1)
 	firstFunPtr := fs[0].Func.Entry()
 	for _, f := range fs[1:] {
-		if firstFunPtr == f.Func.Entry() {
+		if f.Func != nil && firstFunPtr == f.Func.Entry() {
 			return true
 		}
 	}
