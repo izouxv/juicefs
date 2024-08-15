@@ -1,7 +1,7 @@
-//go:build windows && !nofuse
+//go:build nofuse
 
 /*
- * JuiceFS, Copyright 2020 Juicedata, Inc.
+ * JuiceFS, Copyright 2023 Juicedata, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,39 +22,20 @@ import (
 	"github.com/juicedata/juicefs/pkg/meta"
 	"github.com/juicedata/juicefs/pkg/object"
 	"github.com/juicedata/juicefs/pkg/vfs"
-	"github.com/juicedata/juicefs/pkg/winfsp"
 	"github.com/urfave/cli/v2"
 )
 
 func mountFlags() []cli.Flag {
-	return []cli.Flag{
-		&cli.StringFlag{
-			Name:  "o",
-			Usage: "other FUSE options",
-		},
-		&cli.BoolFlag{
-			Name:  "as-root",
-			Usage: "Access files as administrator",
-		},
-		&cli.Float64Flag{
-			Name:  "file-cache-to",
-			Value: 0.1,
-			Usage: "Cache file attributes in seconds",
-		},
-		&cli.Float64Flag{
-			Name:  "delay-close",
-			Usage: "delay file closing in seconds.",
-		},
-	}
+	return []cli.Flag{}
 }
 
 func makeDaemon(c *cli.Context, conf *vfs.Config) error {
-	logger.Warnf("Cannot run in background in Windows.")
+	logger.Warnf("Fuse NA")
 	return nil
 }
 
 func makeDaemonForSvc(c *cli.Context, m meta.Meta, metaUrl, listenAddr string) error {
-	logger.Warnf("Cannot run in background in Windows.")
+	logger.Warnf("Fuse NA")
 	return nil
 }
 
@@ -63,15 +44,24 @@ func getDaemonStage() int {
 }
 
 func mountMain(v *vfs.VFS, c *cli.Context) {
-	winfsp.Serve(v, c.String("o"), c.Float64("file-cache-to"), c.Bool("as-root"), c.Int("delay-close"))
+	logger.Warnf("Fuse NA")
 }
 
-func checkMountpoint(name, mp, logPath string, background bool) {}
+func checkMountpoint(name, mp, logPath string, background bool) {
+	logger.Warnf("Fuse NA")
+}
 
 func prepareMp(mp string) {}
 
-func setFuseOption(c *cli.Context, format *meta.Format, vfsConf *vfs.Config) {}
+func setFuseOption(c *cli.Context, format *meta.Format, vfsConf *vfs.Config) {
+	logger.Warnf("Fuse NA")
+}
 
-func launchMount(mp string, conf *vfs.Config) error { return nil }
+func launchMount(mp string, conf *vfs.Config) error {
+	logger.Warnf("Fuse NA")
+	return nil
+}
 
-func installHandler(mp string, v *vfs.VFS, blob object.ObjectStorage) {}
+func installHandler(mp string, v *vfs.VFS, blob object.ObjectStorage) {
+	logger.Warnf("Fuse NA")
+}
